@@ -57,6 +57,10 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
      * syntaxes
      */
     function handle($match, $state, $pos, &$handler){
+      
+        $sqlite = $this->dthlp->_getDB();
+        if(!$sqlite) return false;
+        
         // get lines and additional class
         $lines = explode("\n",$match);
         array_pop($lines);
@@ -133,7 +137,7 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
                             $val = trim($matches[3]);
                             // allow current user name in filter:
                             $val = str_replace('%user%',$_SERVER['REMOTE_USER'],$val);
-                            $val = sqlite_escape_string($val); //pre escape
+                            $val = $sqlite->escape_string($val); //pre escape
                             $com = $matches[2];
                             if($com == '<>'){
                                 $com = '!=';
@@ -233,7 +237,7 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
 
         // build data rows
         $cnt = 0;
-        while ($row = sqlite_fetch_array($res, SQLITE_NUM)) {
+        while ($row = $sqlite->res_fetch_array($res)) {
             $R->doc .= '<tr>';
             foreach($row as $num => $cval){
                 $R->doc .= '<td>';
@@ -265,7 +269,7 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
 
             $R->doc .= '&nbsp;';
 
-            if(sqlite_num_rows($res) > $data['limit']){
+            if($sqlite->res2count($res) > $data['limit']){
                 $next = $offset + $data['limit'];
                 $R->doc .= '<a href="'.wl($ID,array(
                                                 'datasrt' => $_GET['datasrt'],
@@ -286,6 +290,10 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
      * Builds the SQL query from the given data
      */
     function _buildSQL(&$data){
+      
+        $sqlite = $this->dthlp->_getDB();
+        if(!$sqlite) return false;
+        
         $cnt    = 0;
         $tables = array();
         $select = array();
@@ -315,7 +323,7 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
                 if(!$tables[$key]){
                     $tables[$key] = 'T'.(++$cnt);
                     $from  .= ' LEFT JOIN data AS '.$tables[$key].' ON '.$tables[$key].'.pid = pages.pid';
-                    $from  .= ' AND '.$tables[$key].".key = '".sqlite_escape_string($key)."'";
+                    $from  .= ' AND '.$tables[$key].".key = '".$sqlite->escape_string($key)."'";
                 }
                 switch ($col['type']) {
                 case 'pageid':
@@ -347,7 +355,7 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
                 if(!$tables[$col]){
                     $tables[$col] = 'T'.(++$cnt);
                     $from  .= ' LEFT JOIN data AS '.$tables[$col].' ON '.$tables[$col].'.pid = pages.pid';
-                    $from  .= ' AND '.$tables[$col].".key = '".sqlite_escape_string($col)."'";
+                    $from  .= ' AND '.$tables[$col].".key = '".$sqlite->escape_string($col)."'";
                 }
 
                 $order = 'ORDER BY '.$tables[$col].'.value '.$data['sort'][1];
@@ -373,7 +381,7 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
                     if(!$tables[$col]){
                         $tables[$col] = 'T'.(++$cnt);
                         $from  .= ' LEFT JOIN data AS '.$tables[$col].' ON '.$tables[$col].'.pid = pages.pid';
-                        $from  .= ' AND '.$tables[$col].".key = '".sqlite_escape_string($col)."'";
+                        $from  .= ' AND '.$tables[$col].".key = '".$sqlite->escape_string($col)."'";
                     }
 
                     $where .= ' '.$filter['logic'].' '.$tables[$col].'.value '.$filter['compare'].
@@ -381,17 +389,18 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
                 }
             }
         }
-
+        
+        
         // add GET filter
         if($_GET['dataflt']){
             list($col,$val) = split(':',$_GET['dataflt'],2);
             if(!$tables[$col]){
                 $tables[$col] = 'T'.(++$cnt);
                 $from  .= ' LEFT JOIN data AS '.$tables[$col].' ON '.$tables[$col].'.pid = pages.pid';
-                $from  .= ' AND '.$tables[$col].".key = '".sqlite_escape_string($col)."'";
+                $from  .= ' AND '.$tables[$col].".key = '".$sqlite->escape_string($col)."'";
             }
 
-            $where .= ' AND '.$tables[$col].".value = '".sqlite_escape_string($val)."'";
+            $where .= ' AND '.$tables[$col].".value = '".$sqlite->escape_string($val)."'";
         }
 
 

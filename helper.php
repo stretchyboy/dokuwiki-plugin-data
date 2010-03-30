@@ -21,7 +21,9 @@ class helper_plugin_data extends DokuWiki_Plugin {
      * load the sqlite helper
      */
     function _getDB(){
-        $db =& plugin_load('helper', 'sqlite');
+        $helpertype = $this->getConf('database_helper');
+        $db =& plugin_load('helper', $helpertype);
+                
         if(!is_null($db) && $db->init('data',dirname(__FILE__).'/db/')){
             return $db;
         }else{

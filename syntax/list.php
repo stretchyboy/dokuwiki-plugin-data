@@ -45,7 +45,7 @@ class syntax_plugin_data_list extends syntax_plugin_data_table {
         $R->doc .= '<ul class="dataplugin_list '.$data['classes'].'">';
 
         $cnt = 0;
-        while ($row = sqlite_fetch_array($res, SQLITE_NUM)) {
+        while ($row = $sqlite->res_fetch_array($res)) {
             $R->doc .= '<li><div class="li">';
             foreach($row as $num => $cval){
                 $R->doc .= $this->dthlp->_formatData($data['cols'][$clist[$num]],$cval,$R)."\n";

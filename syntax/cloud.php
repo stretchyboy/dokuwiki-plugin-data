@@ -73,7 +73,7 @@ class syntax_plugin_data_cloud extends syntax_plugin_data_table {
         // build query
         $sql = "SELECT value, COUNT(pid) as cnt
                   FROM data
-                 WHERE key = '".sqlite_escape_string($ckey)."'
+                 WHERE key = '".$sqlite->escape_string($ckey)."'
               GROUP BY value";
         if($data['min'])   $sql .= ' HAVING cnt >= '.$data['min'];
         $sql .= ' ORDER BY cnt DESC';
@@ -84,7 +84,7 @@ class syntax_plugin_data_cloud extends syntax_plugin_data_table {
         $res = $sqlite->query($sql);
         $min = 0;
         $max = 0;
-        while ($row = sqlite_fetch_array($res, SQLITE_NUM)) {
+        while ($row = $sqlite->res_fetch_array($res)) {
             if(!$max) $max  = $row[1];
             $min  = $row[1];
             $tags[$row[0]] = $row[1];
