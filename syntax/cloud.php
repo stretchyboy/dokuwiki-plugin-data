@@ -70,11 +70,41 @@ class syntax_plugin_data_cloud extends syntax_plugin_data_table {
         $ckey = array_keys($data['cols']);
         $ckey = $ckey[0];
 
+        $from   = ' ';
+        $where  = ' ';
+
+        // prepare filters (no request filters - we set them ourselves)
+        if(is_array($data['filter']) && count($data['filter'])){
+
+            foreach($data['filter'] as $filter){
+                $col = $filter['key'];
+
+                if($col == '%pageid%'){
+                    $where .= " ".$filter['logic']." pages.page ".$filter['compare']." '".$filter['value']."'";
+                }elseif($col == '%class%'){
+                    $where .= " ".$filter['logic']." pages.class ".$filter['compare']." '".$filter['value']."'";
+                }elseif($col == '%title%'){
+                    $where .= " ".$filter['logic']." pages.title ".$filter['compare']." '".$filter['value']."'";
+                }else{
+                    // filter by hidden column?
+                    if(!$tables[$col]){
+                        $tables[$col] = 'T'.(++$cnt);
+                        $from  .= ' LEFT JOIN data AS '.$tables[$col].' ON '.$tables[$col].'.pid = pages.pid';
+                        $from  .= ' AND '.$tables[$col].".key = '".$sqlite->escape_string($col)."'";
+                    }
+
+                    $where .= ' '.$filter['logic'].' '.$tables[$col].'.value '.$filter['compare'].
+                              " '".$filter['value']."'"; //value is already escaped
+                }
+            }
+        }
+
         // build query
-        $sql = "SELECT value, COUNT(pid) as cnt
-                  FROM data
-                 WHERE key = '".$sqlite->escape_string($ckey)."'
-              GROUP BY value";
+        $sql = "SELECT data.value, COUNT(data.pid) as cnt
+                  FROM data $from
+                 WHERE data.key = '".$sqlite->escape_string($ckey)."'
+                 $where
+              GROUP BY data.value";
         if($data['min'])   $sql .= ' HAVING cnt >= '.$data['min'];
         $sql .= ' ORDER BY cnt DESC';
         if($data['limit']) $sql .= ' LIMIT '.$data['limit'];
@@ -95,8 +125,8 @@ class syntax_plugin_data_cloud extends syntax_plugin_data_table {
         $renderer->doc .= '<ul class="dataplugin_cloud '.hsc($data['classes']).'">';
         foreach($tags as $tag => $lvl){
             $renderer->doc .= '<li class="cl'.$lvl.'">';
-            $renderer->doc .= '<a href="'.wl($data['page'],array('datasrt'=>$_GET['datasrt'],
-                                                                 'dataflt'=>$ckey.':'.$tag )).
+            $renderer->doc .= '<a href="'.wl($data['page'],array('datasrt'=>$_REQUEST['datasrt'],
+                                                                 'dataflt[]'=>"$ckey=$tag" )).
                               '" title="'.sprintf($this->getLang('tagfilter'),hsc($tag)).'" class="wikilink1">'.hsc($tag).'</a>';
             $renderer->doc .= '</li>';
         }
