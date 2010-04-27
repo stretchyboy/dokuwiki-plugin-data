@@ -7,4 +7,3 @@
  
 $meta['edit_content_only']             = array('onoff');
 
-$meta['database_helper']    = array('multichoice', '_choices' => array('sqlite','sqlitepdo'));
