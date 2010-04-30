@@ -11,6 +11,11 @@ require_once(DOKU_PLUGIN.'action.php');
 class action_plugin_data extends DokuWiki_Action_Plugin {
 
     /**
+     * will hold Modes the caching works for
+     */
+    var $supportedModes = array('xhtml', 'i');
+    
+    /**
      * will hold the data helper plugin
      */
     var $dthlp = null;
@@ -31,6 +36,7 @@ class action_plugin_data extends DokuWiki_Action_Plugin {
         $controller->register_hook('HTML_EDIT_FORMSELECTION', 'BEFORE', $this, '_editform');
         $controller->register_hook('ACTION_ACT_PREPROCESS', 'BEFORE', $this, '_handle_edit_post');
         $controller->register_hook('AJAX_CALL_UNKNOWN', 'BEFORE', $this, '_handle_ajax');
+        $controller->register_hook('PARSER_CACHE_USE','BEFORE', $this, '_cache_prepare');
     }
 
     /**
@@ -163,5 +169,52 @@ class action_plugin_data extends DokuWiki_Action_Plugin {
         require_once DOKU_INC . 'inc/JSON.php';
         $json = new JSON();
         echo '(' . $json->encode($result) . ')';
+    }
+    
+     /**
+     * prepare the cache object for default _useCache action
+     */
+    function _cache_prepare(&$event, $param) {
+        global $ID;
+        global $conf;
+
+        $cache =& $event->data;
+        
+        // we're only interested in instructions of the current page
+        // without the ID check we'd get the cache objects for included pages as well
+        if(!isset($cache->page) && ($cache->page != $ID)) return;
+        if(!isset($cache->mode) || !in_array($cache->mode, $this->supportedModes)) return;
+        
+        $sqlite = $this->dthlp->_getDB();
+        if(!$sqlite) return;
+        $cache->depends['files'][] = $sqlite->dbfile;
+        
+        // get additional depends
+        $depends = p_get_metadata($ID, 'relation haspart');
+        if(empty($depends)) return;
+        
+        
+        $key = ''; 
+        foreach(array_keys($depends) as $page) {
+            if(strpos($page,'/') || cleanID($page) != $page) {
+                continue;
+            } else {
+                $file = wikiFN($page);
+                if(!in_array($cache->depends['files'], array($file)) && @file_exists($file)) {
+                    $cache->depends['files'][] = $file;
+                    $key .= '#' . $page . '|ACL' . auth_quickaclcheck($page);
+                }
+            }
+        }
+
+        // empty $key implies no includes, so nothing to do
+        if(empty($key)) return;
+
+        // mark the cache as being modified by the include plugin
+        $cache->dataplugin = true;
+        // set new cache key & cache name
+        // now also dependent on included page ids and their ACL_READ status
+        $cache->key .= $key;
+        $cache->cache = getCacheName($cache->key, $cache->ext);
     }
 }
