@@ -359,7 +359,7 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
 
         // add request filters
         $data['filter'] = array_merge($data['filter'], $this->dthlp->_get_filters());
-
+        $orginal_tables = $tables;
         // prepare filters
         if(is_array($data['filter']) && count($data['filter'])){
 
@@ -374,7 +374,7 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
                     $where .= " ".$filter['logic']." pages.title ".$filter['compare']." '".$filter['value']."'";
                 }else{
                     // filter by hidden column?
-                    if(!$tables[$col]){
+                    if(!$orginal_tables[$col]){
                         $tables[$col] = 'T'.(++$cnt);
                         $from  .= ' LEFT JOIN data AS '.$tables[$col].' ON '.$tables[$col].'.pid = pages.pid';
                         $from  .= ' AND '.$tables[$col].".key = '".$sqlite->escape_string($col)."'";
@@ -382,6 +382,7 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
 
                     $where .= ' '.$filter['logic'].' '.$tables[$col].'.value '.$filter['compare'].
                               " '".$filter['value']."'"; //value is already escaped
+                    unset($orginal_tables[$col]);
                 }
             }
         }
