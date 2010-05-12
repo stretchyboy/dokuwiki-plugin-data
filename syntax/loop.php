@@ -25,6 +25,7 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
      * What kind of syntax are we?
      */
     function getType(){
+        return 'container';
         return 'substition';
     }
 
@@ -32,7 +33,7 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
      * What about paragraphs?
      */
     function getPType(){
-        return 'block';
+        return 'stack';
     }
 
     /**
@@ -156,14 +157,26 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
         $sFile = wikiFN($data['looptemplate']);
         if(!@file_exists($sFile))
         {
-            msg('data plugin: looptemplate selected',-1);
+          
+          $perm = auth_quickaclcheck($data['looptemplate']);
+          $sCreate = '';
+          $w = is_writable($sFile);
+          if ($perm >= AUTH_EDIT) {
+         
+            $sCreate = ': <a href="'.wl($data['looptemplate'],array('do'=>'edit')).
+            
+                                '" title="'.'Create the template'.
+                                '" class="" tagret="_blank">'.'Create the template'.'</a>'; 
+          }
+          
+            msg('data plugin: looptemplate missing'.$sCreate,-1);
           
         }
         
         $sTpl = io_readFile($sFile);
         
         $aMatches = array();
-        preg_match_all('/@@([^@\s]+)@@/', $sTpl, $aMatches);
+        preg_match_all('/@@([^@]+)@@/', $sTpl, $aMatches);
         
         foreach($aMatches[1] as $iKey => $col)
         {
@@ -208,9 +221,6 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
         $R->meta['relation']['haspart'][$data['looptemplate']] = true;
         return true;
       }
-      
-      //$R->info['cache'] = false;
-      //echo "\n<br><pre>\nR =" .var_export($R, TRUE)."</pre>";
       
       if(is_null($data)) return false;
       
@@ -260,14 +270,16 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
         //$R->doc .= $sChunk;
         $aInstructions = p_get_instructions($sChunk);
         $sXHTML = p_render($format, $aInstructions, $R->info);
+        //$R->doc .= '<div class="dataplugin_loop_item">';
         $R->doc .= $sXHTML;
+        //$R->doc .= '</div>';
         $cnt++;
         if($data['limit'] && ($cnt == $data['limit'])) break; // keep an eye on the limit
       }
 
       // if limit was set, add control
       if($data['limit']){
-          $R->doc .= '<tr><th colspan="'.count($data['cols']).'">';
+          $R->doc .= '<div>';
           $offset = (int) $_REQUEST['dataofs'];
           if($offset){
               $prev = $offset - $data['limit'];
@@ -297,10 +309,18 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
                             '" title="'.$this->getLang('next').
                             '" class="next">'.$this->getLang('next').'</a>';
           }
-          $R->doc .= '</th></tr>';
+          $R->doc .= '</div>';
       }
-
+      
+      $perm = auth_quickaclcheck($data['looptemplate']);
+      if (($perm >= AUTH_EDIT) && (is_writable(wikiFN($data['looptemplate'])))) {
+     
+        $R->doc .= '<a href="'.wl($data['looptemplate'],array('do'=>'edit')).
+                            '" title="'.'Edit the loop above'.
+                            '" class="">'.'Edit the loop above'.'</a>'; 
+      }
       $R->doc .= '</div>';
+      
 
       return true;
     }
@@ -314,7 +334,7 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
         if(!$sqlite) return false;
         
         $cnt    = 0;
-        $loops = array();
+        $tables = array();
         $select = array();
         $from   = '';
         $where  = '1 = 1';
@@ -341,22 +361,22 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
             }elseif($key == '%title%'){
                 $select[] = "pages.page || '|' || pages.title";
             }else{
-                if(!$loops[$key]){
-                    $loops[$key] = 'T'.(++$cnt);
-                    $from  .= ' LEFT JOIN data AS '.$loops[$key].' ON '.$loops[$key].'.pid = pages.pid';
-                    $from  .= ' AND '.$loops[$key].".key = '".$sqlite->escape_string($key)."'";
+                if(!$tables[$key]){
+                    $tables[$key] = 'T'.(++$cnt);
+                    $from  .= ' LEFT JOIN data AS '.$tables[$key].' ON '.$tables[$key].'.pid = pages.pid';
+                    $from  .= ' AND '.$tables[$key].".key = '".$sqlite->escape_string($key)."'";
                 }
                 switch ($col['type']) {
                 case 'pageid':
-                    $select[] = "pages.page || '|' || group_concat(".$loops[$key].".value,'\n')";
+                    $select[] = "pages.page || '|' || group_concat(".$tables[$key].".value,'\n')";
                     $col['type'] = 'title';
                     break;
                 case 'wiki':
-                    $select[] = "pages.page || '|' || group_concat(".$loops[$key].".value,'\n')";
+                    $select[] = "pages.page || '|' || group_concat(".$tables[$key].".value,'\n')";
                     break;
                 default:
                     // Prevent stripping of trailing zeros by forcing a CAST
-                    $select[] = 'group_concat(" " || '.$loops[$key].".value,'\n')";
+                    $select[] = 'group_concat(" " || '.$tables[$key].".value,'\n')";
                 }
             }
         }
@@ -368,19 +388,22 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
 
             if($col == '%pageid%'){
                 $order = 'ORDER BY pages.page '.$data['sort'][1];
-            }elseif($col == '%class%'){
+            }elseif($col == '%class%'){ 
                 $order = 'ORDER BY pages.class '.$data['sort'][1];
             }elseif($col == '%title%'){
                 $order = 'ORDER BY pages.title '.$data['sort'][1];
+            }elseif($col == '%pseudo%'){
+              $day = date('j');
+              $order = 'ORDER BY substr(ifnull(pages.title,"")||ifnull(pages.page),""), '.$day.'% length(ifnull(pages.title,"")||ifnull(pages.page)) '.$data['sort'][1];
             }else{
                 // sort by hidden column?
-                if(!$loops[$col]){
-                    $loops[$col] = 'T'.(++$cnt);
-                    $from  .= ' LEFT JOIN data AS '.$loops[$col].' ON '.$loops[$col].'.pid = pages.pid';
-                    $from  .= ' AND '.$loops[$col].".key = '".$sqlite->escape_string($col)."'";
+                if(!$tables[$col]){
+                    $tables[$col] = 'T'.(++$cnt);
+                    $from  .= ' LEFT JOIN data AS '.$tables[$col].' ON '.$tables[$col].'.pid = pages.pid';
+                    $from  .= ' AND '.$tables[$col].".key = '".$sqlite->escape_string($col)."'";
                 }
 
-                $order = 'ORDER BY '.$loops[$col].'.value '.$data['sort'][1];
+                $order = 'ORDER BY '.$tables[$col].'.value '.$data['sort'][1];
             }
         }else{
             $order = 'ORDER BY 1 ASC';
@@ -388,7 +411,7 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
 
         // add request filters
         $data['filter'] = array_merge($data['filter'], $this->dthlp->_get_filters());
-
+        $orginal_tables = $tables; //take a copy so that all filters need hidden columns generate new ones
         // prepare filters
         if(is_array($data['filter']) && count($data['filter'])){
 
@@ -403,13 +426,13 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
                     $where .= " ".$filter['logic']." pages.title ".$filter['compare']." '".$filter['value']."'";
                 }else{
                     // filter by hidden column?
-                    if(!$loops[$col]){
-                        $loops[$col] = 'T'.(++$cnt);
-                        $from  .= ' LEFT JOIN data AS '.$loops[$col].' ON '.$loops[$col].'.pid = pages.pid';
-                        $from  .= ' AND '.$loops[$col].".key = '".$sqlite->escape_string($col)."'";
+                    if(!$orginal_tables[$col]){
+                        $tables[$col] = 'T'.(++$cnt);
+                        $from  .= ' LEFT JOIN data AS '.$tables[$col].' ON '.$tables[$col].'.pid = pages.pid';
+                        $from  .= ' AND '.$tables[$col].".key = '".$sqlite->escape_string($col)."'";
                     }
 
-                    $where .= ' '.$filter['logic'].' '.$loops[$col].'.value '.$filter['compare'].
+                    $where .= ' '.$filter['logic'].' '.$tables[$col].'.value '.$filter['compare'].
                               " '".$filter['value']."'"; //value is already escaped
                 }
             }
@@ -430,7 +453,6 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
                 $sql .= ' OFFSET '.((int) $_REQUEST['dataofs']);
             }
         }
-        //echo "\n<br><pre>\nsql =" .$sql."</pre>";
         return $sql;
         
     }
