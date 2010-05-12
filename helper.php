@@ -118,7 +118,7 @@ class helper_plugin_data extends DokuWiki_Plugin {
                     break;
                 case 'tag':
                     #FIXME handle pre/postfix
-                    $outs[] = '<a href="'.wl(str_replace('/',':',cleanID($column['key'])),array('dataflt'=>$column['key'].':'.$val )).
+                    $outs[] = '<a href="'.wl(str_replace('/',':',cleanID($column['key'])),array('dataflt'=>$column['key'].'='.$val )).
                               '" title="'.sprintf($this->getLang('tagfilter'),hsc($val)).
                               '" class="wikilink1">'.hsc($val).'</a>';
                     break;
@@ -227,7 +227,7 @@ class helper_plugin_data extends DokuWiki_Plugin {
      * @return mixed - array on success, false on error
      */
     function _parse_filter($filterline){
-        if(preg_match('/^(.*?)(=|<|>|<=|>=|<>|!=|=~|~|!~)(.*)$/',$filterline,$matches)){
+        if(preg_match('/^(.*?)(<=|>=|<>|!=|=~|!~|<|>|~|=)(.*)$/',$filterline,$matches)){
             $column = $this->_column(trim($matches[1]));
             $val = trim($matches[3]);
             // allow current user name in filter:
@@ -241,10 +241,13 @@ class helper_plugin_data extends DokuWiki_Plugin {
             if($com == '<>'){
                 $com = '!=';
             }elseif($com == '=~' || $com == '~' || $com == '!~'){
-                $com = 'LIKE';
                 $val = str_replace('*','%',$val);
                 if ($com == '!~'){
-                    $com = 'NOT '.$com;
+                    $com = 'NOT LIKE';
+                }
+                else
+                {
+                 $com = 'LIKE'; 
                 }
             }
 
@@ -281,7 +284,6 @@ class helper_plugin_data extends DokuWiki_Plugin {
                 $filters[] = $f;
             }
         }
-
         return $filters;
     }
 
