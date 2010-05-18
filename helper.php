@@ -254,7 +254,15 @@ class helper_plugin_data extends DokuWiki_Plugin {
                 // Clean if there are no asterisks I could kill
                 $val = $this->_cleanData($val, $column['type'], $column['enum']);
             }
-            $val = sqlite_escape_string($val); //pre escape
+            
+            //this is an efficinecy only used in this function to try to speed it up.
+            if(!$this->sqlite)
+            {
+              $this->sqlite = $this->_getDB();
+            }
+
+            if(!$this->sqlite) return;
+            $val = $this->sqlite->escape_string($val); //pre escape
 
             return array('key'     => $column['key'],
                          'value'   => $val,
