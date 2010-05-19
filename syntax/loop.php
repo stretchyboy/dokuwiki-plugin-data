@@ -33,7 +33,7 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
      * What about paragraphs?
      */
     function getPType(){
-        return 'stack';
+        return 'block';
     }
 
     /**
