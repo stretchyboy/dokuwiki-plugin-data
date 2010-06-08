@@ -164,13 +164,10 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
           if ($perm >= AUTH_EDIT) {
          
             $sCreate = ': <a href="'.wl($data['looptemplate'],array('do'=>'edit')).
-            
                                 '" title="'.'Create the template'.
                                 '" class="" tagret="_blank">'.'Create the template'.'</a>'; 
           }
-          
-            msg('data plugin: looptemplate missing'.$sCreate,-1);
-          
+          msg('data plugin: looptemplate missing'.$sCreate,-1);
         }
         
         $sTpl = io_readFile($sFile);
@@ -243,6 +240,7 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
       $cnt = 0;
       while ($row = $sqlite->res_fetch_array($res))
       {
+      
         $sChunk = $sOrg;
         foreach($row as $num => $cval)
         {
@@ -260,14 +258,9 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
           }
           $sValCommaed = join(', ',$outs);
           $sChunk = str_replace($sMarkup, $sValCommaed, $sChunk);
-          
-            
+ 
           // TODO : add different verision that uses an HTML template and the code below to insert html
-          /*$sChunk = str_replace($sMarkup, $this->dthlp->_formatData(
-                              $data['cols'][$clist[$num]],
-                              $cval,$R), $sChunk);*/
         }
-        //$R->doc .= $sChunk;
         $aInstructions = p_get_instructions($sChunk);
         $sXHTML = p_render($format, $aInstructions, $R->info);
         //$R->doc .= '<div class="dataplugin_loop_item">';
@@ -328,7 +321,6 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
      * Builds the SQL query from the given data
      */
     function _buildSQL(&$data){
-      
         $sqlite = $this->dthlp->_getDB();
         if(!$sqlite) return false;
         
@@ -363,7 +355,7 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
                 if(!$tables[$key]){
                     $tables[$key] = 'T'.(++$cnt);
                     $from  .= ' LEFT JOIN data AS '.$tables[$key].' ON '.$tables[$key].'.pid = pages.pid';
-                    $from  .= ' AND '.$tables[$key].".key = '".$sqlite->escape_string($key)."'";
+                    $from  .= ' AND '.$tables[$key].".key = '".$sqlite->escape_string($key)."'\n";
                 }
                 switch ($col['type']) {
                 case 'pageid':
@@ -392,14 +384,19 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
             }elseif($col == '%title%'){
                 $order = 'ORDER BY pages.title '.$data['sort'][1];
             }elseif($col == '%pseudo%'){
-              $day = date('j');
-              $order = 'ORDER BY substr(ifnull(pages.title,"")||ifnull(pages.page),""), '.$day.'% length(ifnull(pages.title,"")||ifnull(pages.page)) '.$data['sort'][1];
+              $iNow = time();
+              if(isset($_REQUEST['dayadd']))
+              {
+                $iNow = $iNow + 24 * 60 * 60 * $_REQUEST['dayadd'];
+              }
+              $day = (int) date('j', $iNow);
+              $order = 'ORDER BY substr(pages.page, round(length(pages.page) / 2) + ('.($day).' % round(length(pages.page) / 2))) '.$data['sort'][1];
             }else{
                 // sort by hidden column?
                 if(!$tables[$col]){
                     $tables[$col] = 'T'.(++$cnt);
                     $from  .= ' LEFT JOIN data AS '.$tables[$col].' ON '.$tables[$col].'.pid = pages.pid';
-                    $from  .= ' AND '.$tables[$col].".key = '".$sqlite->escape_string($col)."'";
+                    $from  .= ' AND '.$tables[$col].".key = '".$sqlite->escape_string($col)."'\n";
                 }
 
                 $order = 'ORDER BY '.$tables[$col].'.value '.$data['sort'][1];
@@ -416,7 +413,6 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
 
             foreach($data['filter'] as $filter){
                 $col = $filter['key'];
-
                 if($col == '%pageid%'){
                     $where .= " ".$filter['logic']." pages.page ".$filter['compare']." '".$filter['value']."'";
                 }elseif($col == '%class%'){
@@ -425,10 +421,10 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
                     $where .= " ".$filter['logic']." pages.title ".$filter['compare']." '".$filter['value']."'";
                 }else{
                     // filter by hidden column?
-                    if(!$orginal_tables[$col]){
+                   if(!$orginal_tables[$col]){
                         $tables[$col] = 'T'.(++$cnt);
                         $from  .= ' LEFT JOIN data AS '.$tables[$col].' ON '.$tables[$col].'.pid = pages.pid';
-                        $from  .= ' AND '.$tables[$col].".key = '".$sqlite->escape_string($col)."'";
+                        $from  .= ' AND '.$tables[$col].".key = '".$sqlite->escape_string($col)."'\n";
                     }
 
                     $where .= ' '.$filter['logic'].' '.$tables[$col].'.value '.$filter['compare'].
