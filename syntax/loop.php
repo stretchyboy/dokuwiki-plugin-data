@@ -315,13 +315,12 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
       $perm = auth_quickaclcheck($data['looptemplate']);
       if (($perm >= AUTH_EDIT) && (is_writable(wikiFN($data['looptemplate'])))) {
      
-        $R->doc .= '<a href="'.wl($data['looptemplate'],array('do'=>'edit')).
+        $R->doc .= '<div class="inline dataplugin_loop_edit_link"><a href="'.wl($data['looptemplate'],array('do'=>'edit')).
                             '" title="'.'Edit the loop above'.
-                            '" class="">'.'Edit the loop above'.'</a>'; 
+                            '" class="">'.'Edit the loop above'.'</a></div>'; 
       }
       $R->doc .= '</div>';
       
-
       return true;
     }
 
