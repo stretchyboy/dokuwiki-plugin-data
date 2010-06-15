@@ -1,6 +1,10 @@
 <?php
 
-$lang['menu']      = 'Data Field Aliases';
+$lang['menu_alias'] = 'Data Plugin: Field Aliases';
+$lang['menu_clean'] = 'Data Plugin: Clean up database';
+
+$lang['pages_del']    = '%d entries removed.';
+$lang['submit_clean'] = 'Clean database!';
 
 $lang['sort']      = 'Sort by this column';
 $lang['next']      = 'Next page';
@@ -26,3 +30,5 @@ $lang['title']     = 'Title';
 $lang['type']      = 'Type';
 $lang['multi']     = 'Multi?';
 $lang['value']     = 'Value';
+
+$lang['none']      = 'Nothing found';
