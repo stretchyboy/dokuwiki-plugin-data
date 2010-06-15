@@ -2,6 +2,7 @@
 /**
  *
  * @license    GPL 2 (http://www.gnu.org/licenses/gpl.html)
+ * @author     Martyn Eggleton <martyn@access-space.org> for access-space
  * @author     Andreas Gohr <andi@splitbrain.org>
  */
 // must be run within Dokuwiki
@@ -390,7 +391,8 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
                 $iNow = $iNow + 24 * 60 * 60 * $_REQUEST['dayadd'];
               }
               $day = (int) date('j', $iNow);
-              $order = 'ORDER BY substr(pages.page, round(length(pages.page) / 2) + ('.($day).' % round(length(pages.page) / 2))) '.$data['sort'][1];
+              $order = 'ORDER BY substr(pages.page, round(length(pages.page) / 2) + ('.($day).
+                       ' % round(length(pages.page) / 2)), 3) '.$data['sort'][1];
             }else{
                 // sort by hidden column?
                 if(!$tables[$col]){
