@@ -38,14 +38,27 @@ class admin_plugin_data_aliases extends DokuWiki_Admin_Plugin {
         if(!$sqlite) return false;
 
         $sqlite->query("BEGIN TRANSACTION");
-        $sqlite->query("DELETE FROM aliases");
+        if (!$sqlite->query("DELETE FROM aliases")) {
+            $sqlite->query('ROLLBACK TRANSACTION');
+            return;
+        }
         foreach($_REQUEST['d'] as $row){
             $row = array_map('trim',$row);
             $row['name'] = utf8_strtolower($row['name']);
             $row['name'] = rtrim($row['name'],'s');
             if(!$row['name']) continue;
-            $sqlite->query("INSERT INTO aliases (name, type, prefix, postfix, enum)
-                                 VALUES (?,?,?,?,?)",$row);
+
+            // Clean enum
+            $arr = preg_split('/\s*,\s*/', $row['enum']);
+            $arr = array_unique($arr);
+            asort($arr);
+            $row['enum'] = implode(', ', $arr);
+
+            if (!$sqlite->query("INSERT INTO aliases (name, type, prefix, postfix, enum)
+                                 VALUES (?,?,?,?,?)",$row)) {
+                $sqlite->query('ROLLBACK TRANSACTION');
+                return;
+            }
         }
         $sqlite->query("COMMIT TRANSACTION");
     }
@@ -86,7 +99,8 @@ class admin_plugin_data_aliases extends DokuWiki_Admin_Plugin {
 
             $form->addElement('<td>');
             $form->addElement(form_makeMenuField('d['.$cur.'][type]',
-                                array('','page','title','mail','url', 'dt'),$row['type'],''));
+                                array('','page','title','mail','url', 'dt', 'wiki'),
+                              $row['type'],''));
             $form->addElement('</td>');
 
             $form->addElement('<td>');

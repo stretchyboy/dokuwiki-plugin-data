@@ -68,8 +68,9 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
         $class = preg_replace('/^----+ *data[a-z]+/','',$class);
         $class = trim($class,'- ');
 
-        $data = array();
-        $data['classes'] = $class;
+        $data = array('classes' => $class,
+                      'limit'   => 0,
+                      'headers' => array());
 
         // parse info
         foreach ( $lines as $line ) {
@@ -163,15 +164,19 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
             $data['headers'][] = $item['title'];
         }
 
+        $data['sql'] = $this->_buildSQL($data);
         return $data;
     }
+
+    protected $before_item = '<tr>';
+    protected $after_item  = '</tr>';
+    protected $before_val  = '<td>';
+    protected $after_val   = '</td>';
 
     /**
      * Create output
      */
     function render($format, &$R, $data) {
-        global $ID;
-
         if($format != 'xhtml') return false;
         if(is_null($data)) return false;
         $R->info['cache'] = false;
@@ -179,31 +184,61 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
         $sqlite = $this->dthlp->_getDB();
         if(!$sqlite) return false;
 
-        #dbg($data);
-        $sql = $this->_buildSQL($data); // handles request params, too
-        #dbg($sql);
+        $this->updateSQLwithQuery($data); // handles request params
 
         // run query
         $clist = array_keys($data['cols']);
-        $res = $sqlite->query($sql);
+        $res = $sqlite->query($data['sql']);
 
+        $rows = $sqlite->res2arr($res);
+        $cnt = count($rows);
+
+        if ($cnt === 0) {
+            $this->nullList($data, $clist, $R);
+            return true;
+        }
+
+        if ($data['limit'] && $cnt > $data['limit']) {
+            $rows = array_slice($rows, 0, $data['limit']);
+        }
+
+        $R->doc .= $this->preList($clist, $data);
+        foreach ($rows as $row) {
+            // build data rows
+            $R->doc .= $this->before_item;
+            foreach(array_values($row) as $num => $cval){
+                $R->doc .= $this->before_val;
+                $R->doc .= $this->dthlp->_formatData(
+                                $data['cols'][$clist[$num]],
+                                $cval,$R);
+                $R->doc .= $this->after_val;
+            }
+            $R->doc .= $this->after_item;
+        }
+        $R->doc .= $this->postList($data, $cnt);
+
+        return true;
+    }
+
+    function preList($clist, $data) {
+        global $ID;
         // build table
-        $R->doc .= '<table class="inline dataplugin_table '.$data['classes'].'">';
-
+        $text = '<div class="table dataaggregation">'
+              . '<table class="inline dataplugin_table '.$data['classes'].'">';
         // build column headers
-        $R->doc .= '<tr>';
+        $text .= '<tr>';
         foreach($data['headers'] as $num => $head){
             $ckey = $clist[$num];
 
-            $R->doc .= '<th>';
+            $text .= '<th>';
 
             // add sort arrow
-            if($ckey == $data['sort'][0]){
+            if(isset($data['sort']) && $ckey == $data['sort'][0]){
                 if($data['sort'][1] == 'ASC'){
-                    $R->doc .= '<span>&darr;</span> ';
+                    $text .= '<span>&darr;</span> ';
                     $ckey = '^'.$ckey;
                 }else{
-                    $R->doc .= '<span>&uarr;</span> ';
+                    $text .= '<span>&uarr;</span> ';
                 }
             }
 
@@ -213,9 +248,10 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
             $params['dataofs'] = $_REQUEST['dataofs'];
 
             // clickable header
-            $R->doc .= '<a href="'.wl($ID,$params).
+            $text .= '<a href="'.wl($ID,$params).
                        '" title="'.$this->getLang('sort').'">'.hsc($head).'</a>';
 
+        /* merge conflict
             $R->doc .= '</th>';
         }
         $R->doc .= '</tr>';
@@ -234,21 +270,29 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
             $R->doc .= '</tr>';
             $cnt++;
             if($data['limit'] && ($cnt == $data['limit'])) break; // keep an eye on the limit
+            */
+            $text .= '</th>';
         }
+        $text .= '</tr>';
+        return $text;
+    }
 
-        if ($cnt === 0) {
-            $R->tablerow_open();
-            $R->tablecell_open(count($clist), 'center');
-            $R->cdata($this->getLang('none'));
-            $R->tablecell_close();
-            $R->tablerow_close();
-            $R->doc .= '</table>';
-            return true;
-        }
+    function nullList($data, $clist, &$R) {
+        $R->doc .= $this->preList($clist, $data);
+        $R->tablerow_open();
+        $R->tablecell_open(count($clist), 'center');
+        $R->cdata($this->getLang('none'));
+        $R->tablecell_close();
+        $R->tablerow_close();
+        $R->doc .= '</table></div>';
+    }
 
+    function postList($data, $rowcnt) {
+        global $ID;
+        $text = '';
         // if limit was set, add control
         if($data['limit']){
-            $R->doc .= '<tr><th colspan="'.count($data['cols']).'">';
+            $text .= '<tr><th colspan="'.count($data['cols']).'">';
             $offset = (int) $_REQUEST['dataofs'];
             if($offset){
                 $prev = $offset - $data['limit'];
@@ -259,14 +303,17 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
                 $params['datasrt'] = $_REQUEST['datasrt'];
                 $params['dataofs'] = $prev;
 
-                $R->doc .= '<a href="'.wl($ID,$params).
+                $text .= '<a href="'.wl($ID,$params).
                               '" title="'.$this->getLang('prev').
                               '" class="prev">'.$this->getLang('prev').'</a>';
             }
 
-            $R->doc .= '&nbsp;';
+            $text .= '&nbsp;';
 
+/* merge conflict
             if($sqlite->res2count($res) > $data['limit']){
+*/
+            if($rowcnt > $data['limit']){
                 $next = $offset + $data['limit'];
 
                 // keep url params
@@ -274,16 +321,15 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
                 $params['datasrt'] = $_REQUEST['datasrt'];
                 $params['dataofs'] = $next;
 
-                $R->doc .= '<a href="'.wl($ID,$params).
+                $text .= '<a href="'.wl($ID,$params).
                               '" title="'.$this->getLang('next').
                               '" class="next">'.$this->getLang('next').'</a>';
             }
-            $R->doc .= '</th></tr>';
+            $text .= '</th></tr>';
         }
 
-        $R->doc .= '</table>';
-
-        return true;
+        $text .= '</table></div>';
+        return $text;
     }
 
     /**
@@ -301,14 +347,8 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
         $where  = '1 = 1';
         $order  = '';
 
-        // take overrides from HTTP request params into account
-        if($_REQUEST['datasrt']){
-            if($_REQUEST['datasrt']{0} == '^'){
-                $data['sort'] = array(substr($_REQUEST['datasrt'],1),'DESC');
-            }else{
-                $data['sort'] = array($_REQUEST['datasrt'],'ASC');
-            }
-        }
+        $sqlite = $this->dthlp->_getDB();
+        if(!$sqlite) return false;
 
         // prepare the columns to show
         foreach ($data['cols'] as &$col){
@@ -322,12 +362,14 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
             }elseif($key == '%title%'){
                 $select[] = "pages.page || '|' || pages.title";
             }else{
-                if(!$tables[$key]){
+                if(!isset($tables[$key])){
                     $tables[$key] = 'T'.(++$cnt);
                     $from  .= ' LEFT JOIN data AS '.$tables[$key].' ON '.$tables[$key].'.pid = pages.pid';
-                    $from  .= ' AND '.$tables[$key].".key = '".$sqlite->escape_string($key)."'";
+                    $from  .= ' AND '.$tables[$key].".key = ".$sqlite->quote_string($key);
                 }
-                switch ($col['type']) {
+                $type = $col['type'];
+                if (is_array($type)) $type = $type['type'];
+                switch ($type) {
                 case 'pageid':
                     $select[] = "pages.page || '|' || group_concat(".$tables[$key].".value,'\n')";
                     $col['type'] = 'title';
@@ -344,7 +386,7 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
         unset($col);
 
         // prepare sorting
-        if($data['sort'][0]){
+        if(isset($data['sort'])){
             $col = $data['sort'][0];
 
             if($col == '%pageid%'){
@@ -358,7 +400,7 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
                 if(!$tables[$col]){
                     $tables[$col] = 'T'.(++$cnt);
                     $from  .= ' LEFT JOIN data AS '.$tables[$col].' ON '.$tables[$col].'.pid = pages.pid';
-                    $from  .= ' AND '.$tables[$col].".key = '".$sqlite->escape_string($col)."'";
+                    $from  .= ' AND '.$tables[$col].".key = " . $sqlite->quote_string($col);
                 }
 
                 $order = 'ORDER BY '.$tables[$col].'.value '.$data['sort'][1];
@@ -368,6 +410,7 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
         }
 
         // add request filters
+        if (!isset($data['filter'])) $data['filter'] = array();
         $data['filter'] = array_merge($data['filter'], $this->dthlp->_get_filters());
         $orginal_tables = $tables;
         // prepare filters
@@ -387,7 +430,7 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
                     if(!$orginal_tables[$col]){
                         $tables[$col] = 'T'.(++$cnt);
                         $from  .= ' LEFT JOIN data AS '.$tables[$col].' ON '.$tables[$col].'.pid = pages.pid';
-                        $from  .= ' AND '.$tables[$col].".key = '".$sqlite->escape_string($col)."'";
+                        $from  .= ' AND '.$tables[$col].".key = " . $sqlite->quote_string($col);
                     }
 
                     $where .= ' '.$filter['logic'].' '.$tables[$col].'.value '.$filter['compare'].
@@ -407,14 +450,27 @@ class syntax_plugin_data_table extends DokuWiki_Syntax_Plugin {
         // offset and limit
         if($data['limit']){
             $sql .= ' LIMIT '.($data['limit'] + 1);
-
-            if((int) $_REQUEST['dataofs']){
-                $sql .= ' OFFSET '.((int) $_REQUEST['dataofs']);
-            }
+            // offset is added from REQUEST params in updateSQLwithQuery
         }
 
         return $sql;
     }
 
+    function updateSQLwithQuery(&$data) {
+        // take overrides from HTTP request params into account
+        if(isset($_REQUEST['datasrt'])){
+            if($_REQUEST['datasrt']{0} == '^'){
+                $data['sort'] = array(substr($_REQUEST['datasrt'],1),'DESC');
+            }else{
+                $data['sort'] = array($_REQUEST['datasrt'],'ASC');
+            }
+            // Rebuild SQL FIXME do this smarter & faster
+            $data['sql'] = $this->_buildSQL($data);
+        }
+
+        if($data['limit'] && (int) $_REQUEST['dataofs']){
+            $data['sql'] .= ' OFFSET '.((int) $_REQUEST['dataofs']);
+        }
+    }
 }
 

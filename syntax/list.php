@@ -21,27 +21,20 @@ class syntax_plugin_data_list extends syntax_plugin_data_table {
         $this->Lexer->addSpecialPattern('----+ *datalist(?: [ a-zA-Z0-9_]*)?-+\n.*?\n----+',$mode,'plugin_data_list');
     }
 
+    protected $before_item = '<li><div class="li">';
+    protected $after_item  = '</div></li>';
+    protected $before_val  = '';
+    protected $after_val   = ' ';
 
     /**
      * Create output
      */
-    function render($format, &$R, $data) {
-        if($format != 'xhtml') return false;
-        if(is_null($data)) return false;
-        $R->info['cache'] = false;
+    function preList($clist, $data) {
+        return '<div class="dataaggregation"><ul class="dataplugin_list '.$data['classes'].'">';
+    }
 
-        $sqlite = $this->dthlp->_getDB();
-        if(!$sqlite) return false;
-
-        #dbg($data);
-        $sql = $this->_buildSQL($data); // handles request params, too
-        #dbg($sql);
-
-        // run query
-        $clist = array_keys($data['cols']);
-        $res = $sqlite->query($sql);
-
-        // build list
+/*merge conflict
+// build list
         $cnt = 0;
         while ($row = $sqlite->res_fetch_array($res)) {
             $R->doc .= '<li><div class="li">';
@@ -58,8 +51,16 @@ class syntax_plugin_data_list extends syntax_plugin_data_table {
             $R->p_close();
             return;
         }
+        */
 
-        $R->doc .= '<ul class="dataplugin_list '.$data['classes'].'">' . $text . '</ul>';
+    function nullList($data, $clist, &$R) {
+        $R->doc .= '<div class="dataaggregation"><p class="dataplugin_list '.$data['classes'].'">';
+        $R->cdata($this->getLang('none'));
+        $R->doc .= '</p></div>';
+    }
+
+    function postList($data) {
+        return '</ul></div>';
     }
 
 }

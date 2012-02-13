@@ -5,5 +5,5 @@
  * @author Martyn Eggleton <martyn@access-space.org>
  */
  
-$meta['edit_content_only']             = array('onoff');
+$meta['edit_content_only'] = array('onoff');
 

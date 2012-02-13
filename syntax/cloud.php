@@ -52,6 +52,60 @@ class syntax_plugin_data_cloud extends syntax_plugin_data_table {
         $this->Lexer->addSpecialPattern('----+ *datacloud(?: [ a-zA-Z0-9_]*)?-+\n.*?\n----+',$mode,'plugin_data_cloud');
     }
 
+    function _buildSQL(&$data){
+        $ckey = array_keys($data['cols']);
+        $ckey = $ckey[0];
+
+        $from   = ' ';
+        $where  = ' ';
+        $pagesjoin = '';
+        $tables = array();
+
+        $sqlite = $this->dthlp->_getDB();
+        if(!$sqlite) return false;
+
+        $fields = array('pageid' => 'page', 'class' => 'class',
+                       'title' => 'title');
+        // prepare filters (no request filters - we set them ourselves)
+        if(is_array($data['filter']) && count($data['filter'])){
+
+            foreach($data['filter'] as $filter){
+                $col = $filter['key'];
+
+                if (preg_match('/^%(\w+)%$/', $col, $m) && isset($fields[$m[1]])) {
+                    $where .= " ".$filter['logic']." pages." . $fields[$m[1]] .
+                              " " . $filter['compare']." '".$filter['value']."'";
+                    $pagesjoin = ' LEFT JOIN pages ON pages.pid = data.pid';
+                }else{
+                    // filter by hidden column?
+                    if(!$tables[$col]){
+                        $tables[$col] = 'T'.(++$cnt);
+                        $from  .= ' LEFT JOIN data AS '.$tables[$col].' ON '.$tables[$col].'.pid = pages.pid';
+                        $from  .= ' AND '.$tables[$col].".key = ".$sqlite->quote_string($col);
+
+                    }
+
+                    $where .= ' '.$filter['logic'].' '.$tables[$col].'.value '.$filter['compare'].
+                              " '".$filter['value']."'"; //value is already escaped
+                }
+            }
+        }
+
+        // build query
+        $sql = "SELECT data.value, COUNT(data.pid) as cnt
+
+                  FROM data $from $pagesjoin
+                 WHERE data.key = ".$sqlite->quote_string($ckey)."
+
+                 $where
+              GROUP BY data.value";
+        if(isset($data['min']))   $sql .= ' HAVING cnt >= '.$data['min'];
+        $sql .= ' ORDER BY cnt DESC';
+        if($data['limit']) $sql .= ' LIMIT '.$data['limit'];
+
+        return $sql;
+    }
+
     /**
      * Create output or save the data
      */
@@ -65,62 +119,25 @@ class syntax_plugin_data_cloud extends syntax_plugin_data_table {
         $sqlite = $this->dthlp->_getDB();
         if(!$sqlite) return false;
 
-        if(!$data['page']) $data['page'] = $ID;
-
         $ckey = array_keys($data['cols']);
         $ckey = $ckey[0];
 
-        $from   = ' ';
-        $where  = ' ';
-
-        // prepare filters (no request filters - we set them ourselves)
-        if(is_array($data['filter']) && count($data['filter'])){
-
-            foreach($data['filter'] as $filter){
-                $col = $filter['key'];
-
-                if($col == '%pageid%'){
-                    $where .= " ".$filter['logic']." pages.page ".$filter['compare']." '".$filter['value']."'";
-                    $from .= ' LEFT JOIN pages ON pages.pid = data.pid';
-                }elseif($col == '%class%'){
-                    $where .= " ".$filter['logic']." pages.class ".$filter['compare']." '".$filter['value']."'";
-                    $from .= ' LEFT JOIN pages ON pages.pid = data.pid';
-                }elseif($col == '%title%'){
-                    $where .= " ".$filter['logic']." pages.title ".$filter['compare']." '".$filter['value']."'";
-                    $from .= ' LEFT JOIN pages ON pages.pid = data.pid';
-                }else{
-                    // filter by hidden column?
-                    if(!$tables[$col]){
-                        $tables[$col] = 'T'.(++$cnt);
-                        $from  .= ' LEFT JOIN data AS '.$tables[$col].' ON '.$tables[$col].'.pid = pages.pid';
-                        $from  .= ' AND '.$tables[$col].".key = '".$sqlite->escape_string($col)."'";
-                    }
-
-                    $where .= ' '.$filter['logic'].' '.$tables[$col].'.value '.$filter['compare'].
-                              " '".$filter['value']."'"; //value is already escaped
-                }
-            }
-        }
-
-        // build query
-        $sql = "SELECT data.value, COUNT(data.pid) as cnt
-                  FROM data $from
-                 WHERE data.key = '".$sqlite->escape_string($ckey)."'
-                 $where
-              GROUP BY data.value";
-        if($data['min'])   $sql .= ' HAVING cnt >= '.$data['min'];
-        $sql .= ' ORDER BY cnt DESC';
-        if($data['limit']) $sql .= ' LIMIT '.$data['limit'];
+        if(!isset($data['page'])) $data['page'] = $ID;
 
         // build cloud data
-        $tags = array();
-        $res = $sqlite->query($sql);
+        $res = $sqlite->query($data['sql']);
+        $tags = $sqlite->res2arr($res);
         $min = 0;
         $max = 0;
+        /* merge conflict
         while ($row = $sqlite->res_fetch_array($res)) {
             if(!$max) $max  = $row[1];
             $min  = $row[1];
             $tags[$row[0]] = $row[1];
+        */
+        foreach ($tags as $row) {
+            if(!$max) $max  = $row;
+            $min  = $row;
         }
         $this->_cloud_weight($tags,$min,$max,5);
 
@@ -152,7 +169,7 @@ class syntax_plugin_data_cloud extends syntax_plugin_data_table {
         // calculate tresholds
         $tresholds = array();
         for($i=0; $i<=$levels; $i++){
-            $tresholds[$i] = pow($max - $min + 1, $i/$levels) + $mini - 1;
+            $tresholds[$i] = pow($max - $min + 1, $i/$levels) + $min - 1;
         }
 
         // assign weights
