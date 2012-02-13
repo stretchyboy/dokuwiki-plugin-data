@@ -102,8 +102,8 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
                 case 'title':
                         $data['title'] = $line[1];
                     break;
+                /*case 'header':
                 case 'head':
-                case 'header':
                 case 'headers':
                         $cols = explode(',',$line[1]);
                         foreach($cols as $col){
@@ -111,6 +111,14 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
                             $data['headers'][] = $col;
                         }
                     break;
+                */    
+                
+                case 'header':
+                        $data['header'] = $line[1];
+                    break;
+                case 'empty':
+                        $data['empty'] = $line[1];
+                    break;        
                 case 'min':
                         $data['min']   = abs((int) $line[1]);
                     break;
@@ -233,8 +241,9 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
       $clist = array_keys($data['cols']);
       $res = $sqlite->query($sql);
       
+      $sOut = "";
       // build loop
-      $R->doc .= '<div class="inline dataplugin_loop '.$data['classes'].'">';
+      $sOut .= '<div class="inline dataplugin_loop '.$data['classes'].'">';
       
       $sOrg = $data['tpl']; 
       // build data rows
@@ -264,16 +273,16 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
         }
         $aInstructions = p_get_instructions($sChunk);
         $sXHTML = p_render($format, $aInstructions, $R->info);
-        //$R->doc .= '<div class="dataplugin_loop_item">';
-        $R->doc .= $sXHTML;
-        //$R->doc .= '</div>';
+        //$sOut .= '<div class="dataplugin_loop_item">';
+        $sOut .= $sXHTML;
+        //$sOut .= '</div>';
         $cnt++;
         if($data['limit'] && ($cnt == $data['limit'])) break; // keep an eye on the limit
       }
 
       // if limit was set, add control
       if($data['limit']){
-          $R->doc .= '<div>';
+          $sOut .= '<div>';
           $offset = (int) $_REQUEST['dataofs'];
           if($offset){
               $prev = $offset - $data['limit'];
@@ -284,12 +293,12 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
               $params['datasrt'] = $_REQUEST['datasrt'];
               $params['dataofs'] = $prev;
 
-              $R->doc .= '<a href="'.wl($ID,$params).
+              $sOut .= '<a href="'.wl($ID,$params).
                             '" title="'.$this->getLang('prev').
                             '" class="prev">'.$this->getLang('prev').'</a>';
           }
 
-          $R->doc .= '&nbsp;';
+          //$sOut .= '&nbsp;';
 
           if($sqlite->res2count($res) > $data['limit']){
               $next = $offset + $data['limit'];
@@ -299,21 +308,36 @@ class syntax_plugin_data_loop extends DokuWiki_Syntax_Plugin {
               $params['datasrt'] = $_REQUEST['datasrt'];
               $params['dataofs'] = $next;
 
-              $R->doc .= '<a href="'.wl($ID,$params).
+              $sOut .= '<a href="'.wl($ID,$params).
                             '" title="'.$this->getLang('next').
                             '" class="next">'.$this->getLang('next').'</a>';
           }
-          $R->doc .= '</div>';
+          $sOut .= '</div>';
+      }
+      
+      if($cnt)
+      {
+        $aInstructions = p_get_instructions($data['header']);
+        $sXHTML = p_render($format, $aInstructions, $R->info);
+        $sOut = $sXHTML.$sOut;
+      }
+      else if($data['empty'])
+      {
+        $aInstructions = p_get_instructions($data['empty']);
+        $sXHTML = p_render($format, $aInstructions, $R->info);
+        $sOut = $sXHTML.$sOut;
       }
       
       $perm = auth_quickaclcheck($data['looptemplate']);
       if (($perm >= AUTH_EDIT) && (is_writable(wikiFN($data['looptemplate'])))) {
      
-        $R->doc .= '<div class="inline dataplugin_loop_edit_link"><a href="'.wl($data['looptemplate'],array('do'=>'edit')).
+        $sOut .= '<div class="inline dataplugin_loop_edit_link"><a href="'.wl($data['looptemplate'],array('do'=>'edit')).
                             '" title="'.'Edit the loop above'.
                             '" class="">'.'Edit the loop above'.'</a></div>'; 
       }
-      $R->doc .= '</div>';
+      $sOut .= '</div>';
+      
+      $R->doc .= $sOut;
       
       return true;
     }
